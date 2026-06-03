@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "cheetahclaws REPL (sandbox cwd)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/cheetahclaws.py",
+      "cwd": "${env:HOME}/cheetahclaws-sandbox",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    },
+    {
+      "name": "cheetahclaws -p (one-shot prompt)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/cheetahclaws.py",
+      "args": ["-p", "hello"],
+      "cwd": "${env:HOME}/cheetahclaws-sandbox",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}
