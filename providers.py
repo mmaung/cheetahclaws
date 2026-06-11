@@ -972,9 +972,28 @@ def stream_anthropic(
     tool_calls = []
     text       = ""
 
+    import logging_utils as _log
+    _session_id = config.get("_session_id", "default")
+
     with client.messages.stream(**kwargs) as stream:
         for event in stream:
             etype = getattr(event, "type", None)
+            _delta    = getattr(event, "delta", None)
+            _dtype    = getattr(_delta, "type", None) if _delta is not None else None
+            _cb_block = getattr(event, "content_block", None)
+            _log.info(
+                "anthropic_stream_event",
+                session_id=_session_id,
+                model=model,
+                event_type=etype,
+                delta_type=_dtype,
+                index=getattr(event, "index", None),
+                content_block_type=getattr(_cb_block, "type", None) if _cb_block is not None else None,
+                text_len=len(getattr(_delta, "text", "") or "") if _dtype == "text_delta" else None,
+                thinking_len=len(getattr(_delta, "thinking", "") or "") if _dtype == "thinking_delta" else None,
+                partial_json_len=len(getattr(_delta, "partial_json", "") or "") if _dtype == "input_json_delta" else None,
+                stop_reason=getattr(_delta, "stop_reason", None) if etype == "message_delta" else None,
+            )
             if etype == "content_block_delta":
                 delta = event.delta
                 dtype = getattr(delta, "type", None)
@@ -1124,8 +1143,43 @@ def stream_openai_compat(
         except Exception:
             pass
 
+    import logging_utils as _log
+    _session_id = config.get("_session_id", "default")
+
     stream = client.chat.completions.create(**kwargs)
     for chunk in stream:
+        _ev_choice = chunk.choices[0] if chunk.choices else None
+        _ev_delta = getattr(_ev_choice, "delta", None) if _ev_choice else None
+        _ev_tool_calls = getattr(_ev_delta, "tool_calls", None) if _ev_delta else None
+        _ev_type = (
+            "usage" if not chunk.choices
+            else "finish" if getattr(_ev_choice, "finish_reason", None)
+            else "tool_calls" if _ev_tool_calls
+            else "reasoning" if getattr(_ev_delta, "reasoning_content", None)
+            else "content" if getattr(_ev_delta, "content", None)
+            else "role" if getattr(_ev_delta, "role", None)
+            else "empty"
+        )
+        _log.info(
+            "openai_stream_event",
+            session_id=_session_id,
+            model=model,
+            event_type=_ev_type,
+            finish_reason=getattr(_ev_choice, "finish_reason", None),
+            content_len=len(getattr(_ev_delta, "content", "") or "") if _ev_delta is not None else None,
+            reasoning_len=len(getattr(_ev_delta, "reasoning_content", "") or "") if _ev_delta is not None else None,
+            tool_calls=[
+                {
+                    "index": getattr(t, "index", None),
+                    "id": getattr(t, "id", None),
+                    "name": getattr(getattr(t, "function", None), "name", None),
+                    "args_len": len(getattr(getattr(t, "function", None), "arguments", "") or ""),
+                }
+                for t in (_ev_tool_calls or [])
+            ] or None,
+            prompt_tokens=getattr(getattr(chunk, "usage", None), "prompt_tokens", None),
+            completion_tokens=getattr(getattr(chunk, "usage", None), "completion_tokens", None),
+        )
         if not chunk.choices:
             # usage-only chunk (some providers send this last)
             if hasattr(chunk, "usage") and chunk.usage:
