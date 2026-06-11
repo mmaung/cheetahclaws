@@ -138,3 +138,45 @@ Dependencies flow downward only. Nothing in feature packages imports from core a
 - **2,347 passing tests** as of May 12, 2026
 - E2E coverage for live LLM providers (skipif-gated on env vars)
 - CI/CD via GitHub Actions
+
+---
+
+## Available Tools
+
+- Read
+- Write
+- Edit
+- Bash
+- Glob
+- Grep
+- WebFetch
+- WebSearch
+- Research
+- NotebookEdit
+- GetDiagnostics
+- AskUserQuestion
+- SleepTimer
+- MemorySave
+- MemoryDelete
+- MemorySearch
+- MemoryList
+- Agent
+- SendMessage
+- CheckAgentResult
+- ListAgentTasks
+- ListAgentTypes
+- Skill
+- SkillList
+- TaskCreate
+- TaskUpdate
+- TaskGet
+- TaskList
+- WebBrowse
+- ReadEmail
+- SendEmail
+- ReadPDF
+- ReadImage
+- ReadSpreadsheet
+- SummarizeLargeFile
+- EnterPlanMode
+- ExitPlanMode
