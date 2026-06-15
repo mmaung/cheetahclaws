@@ -58,6 +58,50 @@ class PermissionRequest:
     granted: bool = False
 
 
+# ── Message recording ──────────────────────────────────────────────────────
+
+# Monotonic counter appended to filenames to disambiguate the rare case
+# where two messages are recorded within the same microsecond. Append
+# sites are all main-thread (see comments in run()), so no lock needed.
+_record_counter = 0
+
+
+def _record_message(msg: dict, config: dict) -> None:
+    """Write one pretty-printed JSON file per appended message.
+
+    Path: ~/.cheetahclaws/messages/<session_id>/<ts>_<seq>.json
+    where <ts> is YYYYMMDDTHHMMSS_<microseconds>. Failures are logged
+    and swallowed so a disk error can't kill the agent loop.
+    """
+    global _record_counter
+    try:
+        from cc_config import CONFIG_DIR
+        from datetime import datetime
+        import json as _json
+        _record_counter += 1
+        session_id = config.get("_session_id", "default")
+        out_dir = CONFIG_DIR / "messages" / session_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%dT%H%M%S_%f")
+        path = out_dir / f"{ts}_{_record_counter:06d}.json"
+        path.write_text(
+            _json.dumps(msg, indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        _log.warn("message_record_failed", error=str(e)[:200])
+
+
+def _append_message(state: "AgentState", msg: dict, config: dict) -> None:
+    """Append `msg` to state.messages and snapshot it to disk.
+
+    Single funnel for every write to state.messages inside run() so a
+    new append site can't silently skip the on-disk log.
+    """
+    state.messages.append(msg)
+    _record_message(msg, config)
+
+
 # ── Agent loop ─────────────────────────────────────────────────────────────
 
 def run(
@@ -85,7 +129,7 @@ def run(
     sctx.pending_image = None
     if pending_img:
         user_msg["images"] = [pending_img]
-    state.messages.append(user_msg)
+    _append_message(state, user_msg, config)
 
     # Inject runtime metadata into config so tools (e.g. Agent) can access it
     config = {**config, "_depth": depth, "_system_prompt": system_prompt}
@@ -291,7 +335,7 @@ def run(
         _rc = getattr(assistant_turn, "reasoning_content", "")
         if _rc and assistant_turn.tool_calls:
             _assistant_msg["reasoning_content"] = _rc
-        state.messages.append(_assistant_msg)
+        _append_message(state, _assistant_msg, config)
 
         state.total_input_tokens  += assistant_turn.in_tokens
         state.total_output_tokens += assistant_turn.out_tokens
@@ -313,7 +357,7 @@ def run(
                     "`ls` (or Glob `**/*` for recursive), Read the relevant "
                     "files, then answer. Try again now."
                 )
-                state.messages.append({"role": "user", "content": _nudge_msg})
+                _append_message(state, {"role": "user", "content": _nudge_msg}, config)
                 _log.info("auto_nudge_text_only",
                            session_id=session_id,
                            reason="user_provided_path_but_assistant_text_only")
@@ -359,9 +403,9 @@ def run(
                        tools=_names,
                        repeats=_loop_repeat_count)
             yield TextChunk(_loop_msg)
-            state.messages.append({
+            _append_message(state, {
                 "role": "assistant", "content": _loop_msg.strip(),
-            })
+            }, config)
             break
 
         # Read-only dedup: walk the batch first, mark any read-only call
@@ -545,12 +589,12 @@ def run(
                                    tool=tc["name"],
                                    error_type=type(_fanout_err).__name__,
                                    error=_truncate_err(str(_fanout_err)))
-            state.messages.append({
+            _append_message(state, {
                 "role":         "tool",
                 "tool_call_id": tc["id"],
                 "name":         tc["name"],
                 "content":      result,
-            })
+            }, config)
             # Loop guard: track whether this batch was all errors.
             res_str = result if isinstance(result, str) else str(result)
             res_low = res_str.lstrip()[:24].lower()
@@ -581,9 +625,9 @@ def run(
                        session_id=session_id,
                        count=_loop_consecutive_errors)
             yield TextChunk(_err_msg)
-            state.messages.append({
+            _append_message(state, {
                 "role": "assistant", "content": _err_msg.strip(),
-            })
+            }, config)
             break
 
 
