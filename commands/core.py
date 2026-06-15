@@ -183,7 +183,18 @@ def cmd_export(args: str, state, config) -> bool:
                 lines.append(f"## Assistant\n\n{content}\n")
             elif role == "tool":
                 name = m.get("name", "tool")
-                lines.append(f"### Tool: {name}\n\n```\n{content[:2000]}\n```\n")
+                body = content[:2000]
+                longest_run = 0
+                run = 0
+                for ch in body:
+                    if ch == "`":
+                        run += 1
+                        if run > longest_run:
+                            longest_run = run
+                    else:
+                        run = 0
+                fence = "`" * max(3, longest_run + 1)
+                lines.append(f"### Tool: {name}\n\n{fence}\n{body}\n{fence}\n")
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text("\n".join(lines), encoding="utf-8")
 
