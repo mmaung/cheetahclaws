@@ -133,10 +133,10 @@ TOOL_SCHEMAS = [
                 "output_mode":      {
                     "type": "string",
                     "enum": ["content", "files_with_matches", "count"],
-                    "description": "content=matching lines, files_with_matches=file paths, count=match counts",
+                    "description": "content=matching lines (required to get actual matches or use 'context'), files_with_matches=file paths only, count=match counts. Default: files_with_matches.",
                 },
                 "case_insensitive": {"type": "boolean"},
-                "context":          {"type": "integer", "description": "Lines of context around matches"},
+                "context":          {"type": "integer", "description": "Lines of context around matches (only applies when output_mode='content')"},
             },
             "required": ["pattern"],
         },
