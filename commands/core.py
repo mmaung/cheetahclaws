@@ -171,6 +171,18 @@ def cmd_export(args: str, state, config) -> bool:
             encoding="utf-8",
         )
     else:
+        def _fence_for(s: str) -> str:
+            longest_run = 0
+            run = 0
+            for ch in s:
+                if ch == "`":
+                    run += 1
+                    if run > longest_run:
+                        longest_run = run
+                else:
+                    run = 0
+            return "`" * max(3, longest_run + 1)
+
         lines = []
         for m in state.messages:
             role = m.get("role", "unknown")
@@ -181,19 +193,19 @@ def cmd_export(args: str, state, config) -> bool:
                 lines.append(f"## User\n\n{content}\n")
             elif role == "assistant":
                 lines.append(f"## Assistant\n\n{content}\n")
+                for tc in m.get("tool_calls") or []:
+                    tc_name = tc.get("name", "tool")
+                    tc_input = tc.get("input", {})
+                    try:
+                        input_str = json.dumps(tc_input, indent=2, ensure_ascii=False)
+                    except (TypeError, ValueError):
+                        input_str = str(tc_input)
+                    fence = _fence_for(input_str)
+                    lines.append(f"### Tool call: {tc_name}\n\n{fence}json\n{input_str}\n{fence}\n")
             elif role == "tool":
                 name = m.get("name", "tool")
                 body = content[:2000]
-                longest_run = 0
-                run = 0
-                for ch in body:
-                    if ch == "`":
-                        run += 1
-                        if run > longest_run:
-                            longest_run = run
-                    else:
-                        run = 0
-                fence = "`" * max(3, longest_run + 1)
+                fence = _fence_for(body)
                 lines.append(f"### Tool: {name}\n\n{fence}\n{body}\n{fence}\n")
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text("\n".join(lines), encoding="utf-8")
